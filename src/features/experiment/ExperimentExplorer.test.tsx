@@ -73,6 +73,23 @@ describe('ExperimentExplorer', () => {
     expect(screen.getByText(/g = \(r \| t\)/i)).toBeInTheDocument();
   });
 
+  it('switches between english, french, and arabic from the top-right language controls', async () => {
+    render(<ExperimentExplorer />);
+
+    expect(screen.getByRole('heading', { name: /let's start our diffraction experiment/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'FR' }));
+    expect(
+      screen.getByRole('heading', { name: /commençons notre expérience de diffraction/i }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'AR' }));
+    expect(screen.getByRole('heading', { name: /لنبدأ تجربة الحيود الخاصة بنا/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'ENG' }));
+    expect(screen.getByRole('heading', { name: /let's start our diffraction experiment/i })).toBeInTheDocument();
+  });
+
   it('supports route tracing and browser back between lesson pages', async () => {
     render(<ExperimentExplorer />);
 

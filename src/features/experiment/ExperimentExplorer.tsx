@@ -28,7 +28,8 @@ import type {
   ValidationMessage,
   ValidationResult,
 } from '../../types/crystallography';
-import { COPY } from './copy';
+import { COPY_BY_LANGUAGE, type LanguageCode } from './copy';
+import { INTERFACE_TEXT, formatInterfaceText } from './interfaceText';
 import { SCIENCE_GLOSSARY, type GlossaryKey } from './scienceGlossary';
 import { StepScene, type SceneVariant } from './StepScene';
 import './ExperimentExplorer.css';
@@ -130,21 +131,6 @@ type RouteState = {
   patternPage: PatternPage;
 };
 
-const INITIAL_SCENE_CUES: SceneCueState = {
-  synthesis: {
-    message: 'Starting the synthesis.',
-    reactionTick: 0,
-  },
-  thinking: {
-    message: 'Checking the symmetry.',
-    reactionTick: 0,
-  },
-  beam: {
-    message: 'Beamline ready.',
-    reactionTick: 0,
-  },
-};
-
 const FORMULA_TERMS: GlossaryKey[] = ['asymmetricUnit', 'fractionalCoordinates'];
 const SYMMETRY_PAGE_TERMS: Record<SymmetryPage, GlossaryKey[]> = {
   0: ['bravaisLattice'],
@@ -157,11 +143,13 @@ const PATTERN_PAGE_TERMS: Record<PatternPage, GlossaryKey[]> = {
   3: ['twoTheta', 'braggLaw', 'cagliotiGaussianProfile'],
 };
 
-function createInitialSceneCues(): SceneCueState {
+function createInitialSceneCues(
+  defaults = INTERFACE_TEXT.en.sceneMessages.defaults,
+): SceneCueState {
   return {
-    synthesis: { ...INITIAL_SCENE_CUES.synthesis },
-    thinking: { ...INITIAL_SCENE_CUES.thinking },
-    beam: { ...INITIAL_SCENE_CUES.beam },
+    synthesis: { message: defaults.synthesis, reactionTick: 0 },
+    thinking: { message: defaults.thinking, reactionTick: 0 },
+    beam: { message: defaults.beam, reactionTick: 0 },
   };
 }
 
@@ -314,7 +302,15 @@ function MessageStack({ messages }: { messages: ValidationMessage[] }) {
   );
 }
 
-function CrystalPreview({ validation }: { validation: ValidationResult }) {
+function CrystalPreview({
+  validation,
+  ariaLabel,
+  emptyHint,
+}: {
+  validation: ValidationResult;
+  ariaLabel: string;
+  emptyHint: string;
+}) {
   const sites = validation.expandedSites.slice(0, 48);
   const width = 280;
   const height = 220;
@@ -324,7 +320,7 @@ function CrystalPreview({ validation }: { validation: ValidationResult }) {
       className="crystal-preview"
       viewBox={`0 0 ${width} ${height}`}
       role="img"
-      aria-label="Crystal preview"
+      aria-label={ariaLabel}
     >
       <defs>
         <linearGradient id="cellGlow" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -377,7 +373,7 @@ function CrystalPreview({ validation }: { validation: ValidationResult }) {
           fill="rgba(255,255,255,0.72)"
           fontSize="14"
         >
-          Pick a symmetry to see the expanded cell.
+          {emptyHint}
         </text>
       ) : null}
     </svg>
@@ -386,9 +382,11 @@ function CrystalPreview({ validation }: { validation: ValidationResult }) {
 
 function PowderPlot({
   pattern,
+  uiText,
   onInteract,
 }: {
   pattern: PowderPatternResult;
+  uiText: (typeof INTERFACE_TEXT)['en']['plot'];
   onInteract?: (message: string) => void;
 }) {
   const figureRef = useRef<HTMLDivElement | null>(null);
@@ -488,7 +486,7 @@ function PowderPlot({
       event.preventDefault();
       const anchor = clientXToTwoTheta(event.clientX);
       zoomAt(anchor, event.deltaY < 0 ? 0.82 : 1.22);
-      onInteract?.(event.deltaY < 0 ? 'Zooming into the selected peaks.' : 'Zooming back out.');
+      onInteract?.(event.deltaY < 0 ? uiText.sceneZoomIn : uiText.sceneZoomOut);
     };
 
     figure.addEventListener('wheel', handleWheel, { passive: false });
@@ -538,7 +536,7 @@ function PowderPlot({
     interactionRef.current = { pointerId: event.pointerId, startTheta };
     setSelection({ start: startTheta, end: startTheta });
     event.currentTarget.setPointerCapture(event.pointerId);
-    onInteract?.('Drag a region to zoom onto those peaks.');
+    onInteract?.(uiText.sceneDrag);
   };
 
   const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
@@ -569,42 +567,38 @@ function PowderPlot({
     setSelection(null);
 
     if (maxTheta - minTheta < Math.max(1, totalSpan * 0.015)) {
-      onInteract?.('Use a wider drag to isolate a peak region.');
+      onInteract?.(uiText.sceneWiderDrag);
       return;
     }
 
     setViewRange(clampRange(minTheta, maxTheta));
-    onInteract?.('Zooming to the selected peak window.');
+    onInteract?.(uiText.sceneSelectedWindow);
   };
 
   const handleDoubleClick = () => {
     setViewRange(defaultRange);
     setSelection(null);
-    onInteract?.('Resetting the full diffraction figure.');
+    onInteract?.(uiText.sceneReset);
   };
 
   const handleZoomOut = () => {
     zoomAt((viewRange.min + viewRange.max) / 2, 1.25);
-    onInteract?.('Zooming back out.');
+    onInteract?.(uiText.sceneZoomOut);
   };
 
   const handleZoomIn = () => {
     zoomAt((viewRange.min + viewRange.max) / 2, 0.8);
-    onInteract?.('Zooming into the selected peaks.');
+    onInteract?.(uiText.sceneZoomIn);
   };
 
   const handleReset = () => {
     setViewRange(defaultRange);
     setSelection(null);
-    onInteract?.('Resetting the full diffraction figure.');
+    onInteract?.(uiText.sceneReset);
   };
 
   if (!hasData) {
-    return (
-      <div className="plot-empty">
-        Set a valid structure and simulation to light up the diffractogram.
-      </div>
-    );
+    return <div className="plot-empty">{uiText.empty}</div>;
   }
 
   return (
@@ -614,37 +608,36 @@ function PowderPlot({
           <button
             className="ghost-button"
             onClick={handleZoomOut}
-            onFocus={() => onInteract?.('Zooming back out.')}
+            onFocus={() => onInteract?.(uiText.sceneZoomOut)}
             type="button"
           >
-            Zoom out
+            {uiText.zoomOut}
           </button>
           <button
             className="ghost-button"
             onClick={handleZoomIn}
-            onFocus={() => onInteract?.('Zooming into the selected peaks.')}
+            onFocus={() => onInteract?.(uiText.sceneZoomIn)}
             type="button"
           >
-            Zoom in
+            {uiText.zoomIn}
           </button>
           <button
             className="ghost-button"
             onClick={handleReset}
-            onFocus={() => onInteract?.('Resetting the full diffraction figure.')}
+            onFocus={() => onInteract?.(uiText.sceneReset)}
             type="button"
           >
-            Reset view
+            {uiText.resetView}
           </button>
         </div>
         <p className="range-note">
-          View: {viewRange.min.toFixed(1)}-{viewRange.max.toFixed(1)} deg. Zoom:{' '}
-          {Math.round(zoomPercent)}%. Wheel to zoom, drag a region to isolate peaks, double-click
-          to reset.
+          {uiText.view}: {viewRange.min.toFixed(1)}-{viewRange.max.toFixed(1)} deg. {uiText.zoom}:{' '}
+          {Math.round(zoomPercent)}%. {uiText.interactionHint}
         </p>
       </div>
 
       <div
-        aria-label="Interactive powder plot viewport"
+        aria-label={uiText.viewportAria}
         className="plot-figure"
         ref={figureRef}
         tabIndex={0}
@@ -660,7 +653,7 @@ function PowderPlot({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           role="img"
-          aria-label="Powder diffraction pattern"
+          aria-label={uiText.patternAria}
         >
           {yTicks.map((tick) => {
             const y = margin.top + plotHeight - (tick / intensityMax) * plotHeight;
@@ -719,7 +712,7 @@ function PowderPlot({
                   className="stick-line"
                 />
                 <title>
-                  ({reflection.h} {reflection.k} {reflection.l}) at{' '}
+                  ({reflection.h} {reflection.k} {reflection.l}) {uiText.reflectionTitleAt}{' '}
                   {reflection.twoTheta.toFixed(2)} deg
                 </title>
               </g>
@@ -747,10 +740,10 @@ function PowderPlot({
 
       <div className="plot-legend">
         <span>
-          <i className="legend-stick" /> Ideal Bragg sticks
+          <i className="legend-stick" /> {uiText.idealBragg}
         </span>
         <span>
-          <i className="legend-curve" /> Broadened powder profile
+          <i className="legend-curve" /> {uiText.broadened}
         </span>
       </div>
     </div>
@@ -805,30 +798,38 @@ function LessonBadge({
 
 function GlossaryChip({
   term,
+  glossary,
   onOpen,
 }: {
   term: GlossaryKey;
+  glossary: typeof SCIENCE_GLOSSARY.en;
   onOpen: (term: GlossaryKey) => void;
 }) {
   return (
     <button className="glossary-chip" onClick={() => onOpen(term)} type="button">
-      {SCIENCE_GLOSSARY[term].label}
+      {glossary[term].label}
     </button>
   );
 }
 
 function GlossaryDialog({
   activeTerm,
+  glossary,
+  titleLabel,
+  closeLabel,
   onClose,
 }: {
   activeTerm: GlossaryKey | null;
+  glossary: typeof SCIENCE_GLOSSARY.en;
+  titleLabel: string;
+  closeLabel: string;
   onClose: () => void;
 }) {
   if (!activeTerm) {
     return null;
   }
 
-  const definition = SCIENCE_GLOSSARY[activeTerm];
+  const definition = glossary[activeTerm];
 
   return (
     <div
@@ -840,11 +841,11 @@ function GlossaryDialog({
       <div className="glossary-dialog" onClick={(event) => event.stopPropagation()}>
         <div className="glossary-header">
           <div>
-            <p className="teaching-label">Scientific detail</p>
+            <p className="teaching-label">{titleLabel}</p>
             <h3>{definition.label}</h3>
           </div>
           <button className="ghost-button" onClick={onClose} type="button">
-            Close
+            {closeLabel}
           </button>
         </div>
         <p className="glossary-summary">{definition.summary}</p>
@@ -873,6 +874,8 @@ function TeachingCard({
   text,
   tip,
   terms,
+  glossaryPrompt,
+  glossary,
   onOpenTerm,
 }: {
   label: string;
@@ -880,6 +883,8 @@ function TeachingCard({
   text: string;
   tip: string;
   terms?: GlossaryKey[];
+  glossaryPrompt: string;
+  glossary: typeof SCIENCE_GLOSSARY.en;
   onOpenTerm?: (term: GlossaryKey) => void;
 }) {
   return (
@@ -890,9 +895,9 @@ function TeachingCard({
       <strong>{tip}</strong>
       {terms?.length && onOpenTerm ? (
         <div className="glossary-chip-row">
-          <span>Click a scientific term for a rigorous definition:</span>
+          <span>{glossaryPrompt}</span>
           {terms.map((term) => (
-            <GlossaryChip key={term} onOpen={onOpenTerm} term={term} />
+            <GlossaryChip glossary={glossary} key={term} onOpen={onOpenTerm} term={term} />
           ))}
         </div>
       ) : null}
@@ -901,6 +906,7 @@ function TeachingCard({
 }
 
 export default function ExperimentExplorer() {
+  const [language, setLanguage] = useState<LanguageCode>('en');
   const [started, setStarted] = useState(false);
   const [currentStep, setCurrentStep] = useState<ExperimentStep>(1);
   const [symmetryPage, setSymmetryPage] = useState<SymmetryPage>(0);
@@ -923,6 +929,9 @@ export default function ExperimentExplorer() {
   const patternStepRef = useRef<HTMLElement | null>(null);
   const heroRef = useRef<HTMLElement | null>(null);
   const historyModeRef = useRef<HistoryMode>('push');
+  const copy = COPY_BY_LANGUAGE[language];
+  const ui = INTERFACE_TEXT[language];
+  const isRtl = language === 'ar';
 
   const formula = buildFormulaFromAtoms(atoms);
   const atomMessages = validateAtomSeeds(atoms);
@@ -939,6 +948,15 @@ export default function ExperimentExplorer() {
     symmetryPage,
     patternPage,
   });
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+    document.documentElement.dir = isRtl ? 'rtl' : 'ltr';
+  }, [isRtl, language]);
+
+  useEffect(() => {
+    setSceneCues(createInitialSceneCues(ui.sceneMessages.defaults));
+  }, [ui.sceneMessages.defaults]);
 
   useEffect(() => {
     if (!bravais) {
@@ -1059,10 +1077,10 @@ export default function ExperimentExplorer() {
       ...currentCues,
       [variant]: {
         ...currentCues[variant],
-        message: INITIAL_SCENE_CUES[variant].message,
+        message: ui.sceneMessages.defaults[variant],
       },
     }));
-  }, [currentStep, started]);
+  }, [currentStep, started, ui.sceneMessages.defaults]);
 
   useEffect(() => {
     if (!started) {
@@ -1118,7 +1136,7 @@ export default function ExperimentExplorer() {
     setCurrentStep(1);
     setSymmetryPage(0);
     setPatternPage(0);
-    setSceneCues(createInitialSceneCues());
+    setSceneCues(createInitialSceneCues(ui.sceneMessages.defaults));
     setActiveGlossaryTerm(null);
   };
 
@@ -1155,7 +1173,7 @@ export default function ExperimentExplorer() {
     setSceneCues((currentCues) => ({
       ...currentCues,
       synthesis: {
-        message: 'Demo recipe loaded.',
+        message: ui.sceneMessages.demoRecipeLoaded,
         reactionTick: currentCues.synthesis.reactionTick + 1,
       },
     }));
@@ -1166,14 +1184,26 @@ export default function ExperimentExplorer() {
     .slice(0, 8);
 
   return (
-    <main className="experiment-app">
+    <main className={`experiment-app${isRtl ? ' is-rtl' : ''}`} dir={isRtl ? 'rtl' : 'ltr'}>
       <section className="hero-shell" ref={heroRef}>
         <div className="hero-copy">
-          <p className="eyebrow">{COPY.intro.eyebrow}</p>
-          <h1>{COPY.intro.title}</h1>
-          <p className="hero-subtitle">{COPY.intro.subtitle}</p>
+          <div className="language-switcher" aria-label={ui.meta.languageLabel}>
+            {(['en', 'fr', 'ar'] as const).map((code) => (
+              <button
+                className={`language-button${language === code ? ' is-active' : ''}`}
+                key={code}
+                onClick={() => setLanguage(code)}
+                type="button"
+              >
+                {code === 'en' ? 'ENG' : code.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          <p className="eyebrow">{copy.intro.eyebrow}</p>
+          <h1>{copy.intro.title}</h1>
+          <p className="hero-subtitle">{copy.intro.subtitle}</p>
           <div className="hero-badges">
-            {COPY.intro.badges.map((badge) => (
+            {copy.intro.badges.map((badge) => (
               <span className="hero-badge" key={badge}>
                 {badge}
               </span>
@@ -1181,21 +1211,21 @@ export default function ExperimentExplorer() {
           </div>
           <div className="hero-actions">
             <button className="primary-button" onClick={launchFreshExperiment} type="button">
-              {COPY.intro.cta}
+              {copy.intro.cta}
             </button>
             <button
               className="ghost-button hero-demo-button"
               onClick={() => applyDemo('nacl')}
               type="button"
             >
-              Try NaCl demo
+              {copy.intro.demos.nacl}
             </button>
             <button
               className="ghost-button hero-demo-button"
               onClick={() => applyDemo('silicon')}
               type="button"
             >
-              Try Si demo
+              {copy.intro.demos.silicon}
             </button>
           </div>
         </div>
@@ -1204,15 +1234,18 @@ export default function ExperimentExplorer() {
           <div className="hero-orb orb-one" />
           <div className="hero-orb orb-two" />
           <div className="hero-panel">
-            <p>Today's mission</p>
-            <strong>Can your crystal survive symmetry and leave a fingerprint on the detector?</strong>
+            <p>{copy.intro.mission.label}</p>
+            <strong>{copy.intro.mission.text}</strong>
           </div>
         </div>
       </section>
 
       <GlossaryDialog
         activeTerm={activeGlossaryTerm}
+        closeLabel={ui.meta.close}
+        glossary={SCIENCE_GLOSSARY[language]}
         onClose={() => setActiveGlossaryTerm(null)}
+        titleLabel={ui.meta.scientificDetail}
       />
 
       {started ? (
@@ -1221,7 +1254,7 @@ export default function ExperimentExplorer() {
             <StepBadge
               active={currentStep === 1}
               unlocked
-              label="1. Formula"
+              label={ui.nav.formula}
               onClick={() => {
                 setCurrentStep(1);
               }}
@@ -1229,7 +1262,7 @@ export default function ExperimentExplorer() {
             <StepBadge
               active={currentStep === 2}
               unlocked={atomStepReady}
-              label="2. Symmetry"
+              label={ui.nav.symmetry}
               onClick={() => {
                 if (!atomStepReady) {
                   return;
@@ -1241,7 +1274,7 @@ export default function ExperimentExplorer() {
             <StepBadge
               active={currentStep === 3}
               unlocked={stepThreeReady}
-              label="3. Pattern"
+              label={ui.nav.pattern}
               onClick={() => {
                 if (!stepThreeReady) {
                   return;
@@ -1258,15 +1291,16 @@ export default function ExperimentExplorer() {
               ref={formulaStepRef}
             >
               <div className="panel-heading">
-                <p className="step-kicker">{COPY.steps[0].kicker}</p>
-                <h2>{COPY.steps[0].title}</h2>
-                <p>{COPY.steps[0].helper}</p>
+                <p className="step-kicker">{copy.steps[0].kicker}</p>
+                <h2>{copy.steps[0].title}</h2>
+                <p>{copy.steps[0].helper}</p>
               </div>
 
               <div className="step-workspace">
                 <aside className="step-stage">
                   <div className="scene-sticky">
                     <StepScene
+                      language={language}
                       variant="synthesis"
                       bubbleText={sceneCues.synthesis.message}
                       reactionTick={sceneCues.synthesis.reactionTick}
@@ -1276,25 +1310,27 @@ export default function ExperimentExplorer() {
 
                 <div className="step-page">
                   <div className="formula-strip">
-                    <span className="formula-label">Asymmetric-unit formula</span>
-                    <strong>{formula || 'Add atoms to reveal the formula.'}</strong>
+                    <span className="formula-label">{ui.formula.stripLabel}</span>
+                    <strong>{formula || ui.formula.emptyFormula}</strong>
                   </div>
 
                   <TeachingCard
-                    label={COPY.lessons.formula.title}
-                    title="Build the asymmetric-unit recipe"
-                    text={COPY.lessons.formula.text}
-                    tip={COPY.lessons.formula.tip}
+                    glossary={SCIENCE_GLOSSARY[language]}
+                    glossaryPrompt={ui.meta.glossaryPrompt}
+                    label={copy.lessons.formula.title}
+                    title={ui.formula.teacherTitle}
+                    text={copy.lessons.formula.text}
+                    tip={copy.lessons.formula.tip}
                     terms={FORMULA_TERMS}
                     onOpenTerm={setActiveGlossaryTerm}
                   />
 
-                  <div className="info-banner">{COPY.callouts.formula}</div>
+                  <div className="info-banner">{copy.callouts.formula}</div>
 
                   <div className="atom-table">
                     <div className="atom-head">
-                      <span>Atom</span>
-                      <span>Element</span>
+                      <span>{ui.formula.atom}</span>
+                      <span>{ui.formula.element}</span>
                       <span>x</span>
                       <span>y</span>
                       <span>z</span>
@@ -1306,7 +1342,7 @@ export default function ExperimentExplorer() {
                         <input
                           list="elements-list"
                           value={atom.element}
-                          {...getSceneHandlers('synthesis', 'Choosing the atom.')}
+                          {...getSceneHandlers('synthesis', ui.sceneMessages.choosingAtom)}
                           onChange={(event) =>
                             setAtoms(
                               updateAtom(atoms, atom.id, {
@@ -1325,7 +1361,7 @@ export default function ExperimentExplorer() {
                             max="1"
                             step="0.001"
                             value={atom[axis]}
-                            {...getSceneHandlers('synthesis', 'Setting coordinates.')}
+                            {...getSceneHandlers('synthesis', ui.sceneMessages.settingCoordinates)}
                             onChange={(event) =>
                               setAtoms(
                                 updateAtom(atoms, atom.id, {
@@ -1337,13 +1373,13 @@ export default function ExperimentExplorer() {
                         ))}
                         <button
                           className="mini-button"
-                          {...getSceneHandlers('synthesis', 'Editing the recipe.')}
+                          {...getSceneHandlers('synthesis', ui.sceneMessages.editingRecipe)}
                           onClick={() =>
                             setAtoms(atoms.filter((candidate) => candidate.id !== atom.id))
                           }
                           type="button"
                         >
-                          Remove
+                          {ui.formula.remove}
                         </button>
                       </div>
                     ))}
@@ -1359,24 +1395,24 @@ export default function ExperimentExplorer() {
                     <button
                       className="ghost-button"
                       onClick={() => {
-                        triggerScene('synthesis', 'New atom added.');
+                        triggerScene('synthesis', ui.sceneMessages.newAtomAdded);
                         setAtoms([...atoms, createAtomSeed(atoms.length + 1)]);
                       }}
                       type="button"
                     >
-                      Add atom
+                      {ui.formula.addAtom}
                     </button>
                     <button
                       className="primary-button"
                       disabled={!atomStepReady}
                       onClick={() => {
-                        triggerScene('synthesis', 'Recipe complete.');
+                        triggerScene('synthesis', ui.sceneMessages.recipeComplete);
                         setSymmetryPage(0);
                         setCurrentStep(2);
                       }}
                       type="button"
                     >
-                      Continue to symmetry
+                      {ui.formula.continueToSymmetry}
                     </button>
                   </div>
 
@@ -1390,15 +1426,16 @@ export default function ExperimentExplorer() {
               ref={symmetryStepRef}
             >
               <div className="panel-heading">
-                <p className="step-kicker">{COPY.steps[1].kicker}</p>
-                <h2>{COPY.steps[1].title}</h2>
-                <p>{COPY.steps[1].helper}</p>
+                <p className="step-kicker">{copy.steps[1].kicker}</p>
+                <h2>{copy.steps[1].title}</h2>
+                <p>{copy.steps[1].helper}</p>
               </div>
 
               <div className="step-workspace">
                 <aside className="step-stage">
                   <div className="scene-sticky">
                     <StepScene
+                      language={language}
                       variant="thinking"
                       bubbleText={sceneCues.thinking.message}
                       reactionTick={sceneCues.thinking.reactionTick}
@@ -1407,8 +1444,8 @@ export default function ExperimentExplorer() {
                 </aside>
 
                 <div className="step-page">
-                  <div className="lesson-badges" aria-label="Symmetry pages">
-                    {COPY.lessons.symmetry.map((lesson, index) => (
+                  <div className="lesson-badges" aria-label={ui.symmetry.pagesAria}>
+                    {copy.lessons.symmetry.map((lesson, index) => (
                       <LessonBadge
                         active={symmetryPage === index}
                         key={lesson.label}
@@ -1422,10 +1459,12 @@ export default function ExperimentExplorer() {
                   {symmetryPage === 0 ? (
                     <>
                       <TeachingCard
-                        label={COPY.lessons.symmetry[0].label}
-                        title={COPY.lessons.symmetry[0].title}
-                        text={COPY.lessons.symmetry[0].text}
-                        tip={COPY.lessons.symmetry[0].tip}
+                        glossary={SCIENCE_GLOSSARY[language]}
+                        glossaryPrompt={ui.meta.glossaryPrompt}
+                        label={copy.lessons.symmetry[0].label}
+                        title={copy.lessons.symmetry[0].title}
+                        text={copy.lessons.symmetry[0].text}
+                        tip={copy.lessons.symmetry[0].tip}
                         terms={SYMMETRY_PAGE_TERMS[0]}
                         onOpenTerm={setActiveGlossaryTerm}
                       />
@@ -1436,24 +1475,24 @@ export default function ExperimentExplorer() {
                             className={`bravais-card${bravais === option.id ? ' is-selected' : ''}`}
                             key={option.id}
                             onClick={() => {
-                              triggerScene('thinking', 'Testing the lattice.');
+                              triggerScene('thinking', ui.sceneMessages.testingLattice);
                               setBravais(option.id);
                             }}
                             type="button"
                           >
                             <strong>{option.label}</strong>
-                            <span>{option.family}</span>
-                            <small>{option.note}</small>
+                            <span>{ui.bravais[option.id].family}</span>
+                            <small>{ui.bravais[option.id].note}</small>
                           </button>
                         ))}
                       </div>
 
                       <div className="control-card selection-card">
-                        <strong>Current lattice choice</strong>
+                        <strong>{ui.symmetry.currentLatticeChoice}</strong>
                         <p>
                           {bravais
-                            ? `${bravais} selected. Next we can choose the matching space group and the cell geometry.`
-                            : 'No Bravais lattice selected yet. Pick one to unlock the next lesson page.'}
+                            ? formatInterfaceText(ui.symmetry.latticeSelected, { bravais })
+                            : ui.symmetry.latticeEmpty}
                         </p>
                       </div>
 
@@ -1461,56 +1500,59 @@ export default function ExperimentExplorer() {
                         <button
                           className="ghost-button"
                           onClick={() => {
-                            triggerScene('thinking', 'Back to the recipe.');
+                            triggerScene('thinking', ui.sceneMessages.backToRecipe);
                             setCurrentStep(1);
                           }}
                           type="button"
                         >
-                          Back to formula
+                          {ui.symmetry.backToFormula}
                         </button>
                         <button
                           className="primary-button"
                           disabled={!bravais}
                           onClick={() => {
-                            triggerScene('thinking', 'Lattice chosen. Moving to the cell setup.');
+                            triggerScene('thinking', ui.sceneMessages.latticeChosen);
                             setSymmetryPage(1);
                           }}
                           type="button"
                         >
-                          Continue to cell setup
+                          {ui.symmetry.continueToCell}
                         </button>
                       </div>
                     </>
                   ) : (
                     <>
                       <TeachingCard
-                        label={COPY.lessons.symmetry[1].label}
-                        title={COPY.lessons.symmetry[1].title}
-                        text={COPY.lessons.symmetry[1].text}
-                        tip={COPY.lessons.symmetry[1].tip}
+                        glossary={SCIENCE_GLOSSARY[language]}
+                        glossaryPrompt={ui.meta.glossaryPrompt}
+                        label={copy.lessons.symmetry[1].label}
+                        title={copy.lessons.symmetry[1].title}
+                        text={copy.lessons.symmetry[1].text}
+                        tip={copy.lessons.symmetry[1].tip}
                         terms={SYMMETRY_PAGE_TERMS[1]}
                         onOpenTerm={setActiveGlossaryTerm}
                       />
 
-                      <div className="info-banner">{COPY.callouts.symmetry}</div>
+                      <div className="info-banner">{copy.callouts.symmetry}</div>
 
                       <div className="two-column symmetry-layout">
                         <div className="control-card">
                           <label className="field-stack">
                             <span className="field-label-row">
-                              <span>Space group</span>
+                              <span>{ui.symmetry.spaceGroup}</span>
                               <GlossaryChip
+                                glossary={SCIENCE_GLOSSARY[language]}
                                 onOpen={setActiveGlossaryTerm}
                                 term="spaceGroup"
                               />
                             </span>
                             <select
                               value={spaceGroupNumber ?? ''}
-                              {...getSceneHandlers('thinking', 'Matching the space group.')}
+                              {...getSceneHandlers('thinking', ui.sceneMessages.matchingSpaceGroup)}
                               onChange={(event) => setSpaceGroupNumber(Number(event.target.value))}
                               disabled={!bravais}
                             >
-                              <option value="">Choose a space group</option>
+                              <option value="">{ui.symmetry.chooseSpaceGroup}</option>
                               {availableSpaceGroups.map((spaceGroup) => (
                                 <option value={spaceGroup.number} key={spaceGroup.number}>
                                   #{spaceGroup.number} {spaceGroup.hmSymbol}
@@ -1533,7 +1575,7 @@ export default function ExperimentExplorer() {
                                     step={CELL_INPUT_RULES[field].step}
                                     value={editable ? cell[field] : lockedCell[field]}
                                     disabled={!editable}
-                                    {...getSceneHandlers('thinking', 'Tuning the cell.')}
+                                    {...getSceneHandlers('thinking', ui.sceneMessages.tuningCell)}
                                     onChange={(event) =>
                                       setCell({
                                         ...cell,
@@ -1553,15 +1595,19 @@ export default function ExperimentExplorer() {
                         </div>
 
                         <div className="control-card preview-card">
-                          <CrystalPreview validation={validation} />
+                          <CrystalPreview
+                            ariaLabel={ui.plot.crystalPreviewAria}
+                            emptyHint={ui.plot.crystalPreviewHint}
+                            validation={validation}
+                          />
                           <div className="preview-copy">
-                            <strong>Expanded-cell formula</strong>
+                            <strong>{ui.symmetry.expandedFormula}</strong>
                             <p>
-                              {validation.summaryFormula ||
-                                'Choose a lattice and a space group to expand the structure.'}
+                              {validation.summaryFormula || ui.symmetry.expandedHint}
                             </p>
                             <p>
-                              Active positions: <strong>{validation.expandedSites.length}</strong>
+                              {ui.symmetry.activePositions}:{' '}
+                              <strong>{validation.expandedSites.length}</strong>
                             </p>
                           </div>
                         </div>
@@ -1571,9 +1617,12 @@ export default function ExperimentExplorer() {
                         <div className="collision-card">
                           {validation.collisions.map((collision) => (
                             <p key={collision.canonicalKey}>
-                              {collision.atomIds.join(' + ')} collapse near (
-                              {collision.position.map((value) => formatNumber(value, 3)).join(', ')}
-                              ).
+                              {formatInterfaceText(ui.symmetry.collisionText, {
+                                atoms: collision.atomIds.join(' + '),
+                                position: collision.position
+                                  .map((value) => formatNumber(value, 3))
+                                  .join(', '),
+                              })}
                             </p>
                           ))}
                         </div>
@@ -1583,24 +1632,24 @@ export default function ExperimentExplorer() {
                         <button
                           className="ghost-button"
                           onClick={() => {
-                            triggerScene('thinking', 'Returning to the lattice choice.');
+                            triggerScene('thinking', ui.sceneMessages.returningToLattice);
                             setSymmetryPage(0);
                           }}
                           type="button"
                         >
-                          Back to lattice
+                          {ui.symmetry.backToLattice}
                         </button>
                         <button
                           className="primary-button"
                           disabled={!stepThreeReady}
                           onClick={() => {
-                            triggerScene('thinking', 'Symmetry solved.');
+                            triggerScene('thinking', ui.sceneMessages.symmetrySolved);
                             setPatternPage(0);
                             setCurrentStep(3);
                           }}
                           type="button"
                         >
-                          Continue to experiment
+                          {ui.symmetry.continueToExperiment}
                         </button>
                       </div>
 
@@ -1616,15 +1665,16 @@ export default function ExperimentExplorer() {
               ref={patternStepRef}
             >
               <div className="panel-heading">
-                <p className="step-kicker">{COPY.steps[2].kicker}</p>
-                <h2>{COPY.steps[2].title}</h2>
-                <p>{COPY.steps[2].helper}</p>
+                <p className="step-kicker">{copy.steps[2].kicker}</p>
+                <h2>{copy.steps[2].title}</h2>
+                <p>{copy.steps[2].helper}</p>
               </div>
 
               <div className="step-workspace">
                 <aside className="step-stage">
                   <div className="scene-sticky">
                     <StepScene
+                      language={language}
                       variant="beam"
                       bubbleText={sceneCues.beam.message}
                       reactionTick={sceneCues.beam.reactionTick}
@@ -1633,8 +1683,8 @@ export default function ExperimentExplorer() {
                 </aside>
 
                 <div className="step-page">
-                  <div className="lesson-badges" aria-label="Pattern pages">
-                    {COPY.lessons.pattern.map((lesson, index) => (
+                  <div className="lesson-badges" aria-label={ui.pattern.pagesAria}>
+                    {copy.lessons.pattern.map((lesson, index) => (
                       <LessonBadge
                         active={patternPage === index}
                         key={lesson.label}
@@ -1648,10 +1698,12 @@ export default function ExperimentExplorer() {
                   {patternPage === 0 ? (
                     <>
                       <TeachingCard
-                        label={COPY.lessons.pattern[0].label}
-                        title={COPY.lessons.pattern[0].title}
-                        text={COPY.lessons.pattern[0].text}
-                        tip={COPY.lessons.pattern[0].tip}
+                        glossary={SCIENCE_GLOSSARY[language]}
+                        glossaryPrompt={ui.meta.glossaryPrompt}
+                        label={copy.lessons.pattern[0].label}
+                        title={copy.lessons.pattern[0].title}
+                        text={copy.lessons.pattern[0].text}
+                        tip={copy.lessons.pattern[0].tip}
                         terms={PATTERN_PAGE_TERMS[0]}
                         onOpenTerm={setActiveGlossaryTerm}
                       />
@@ -1660,14 +1712,12 @@ export default function ExperimentExplorer() {
                         {([
                           {
                             mode: 'xray',
-                            label: 'X-ray',
-                            helper: 'Cu Ka default',
+                            label: ui.pattern.xraySource,
                             wavelength: 1.5406,
                           },
                           {
                             mode: 'neutron',
-                            label: 'Neutron',
-                            helper: 'Thermal CW default',
+                            label: ui.pattern.neutronSource,
                             wavelength: 1.8,
                           },
                         ] as const).map((option) => (
@@ -1677,7 +1727,7 @@ export default function ExperimentExplorer() {
                             }`}
                             key={option.mode}
                             onClick={() => {
-                              triggerScene('beam', 'Selecting the source.');
+                              triggerScene('beam', ui.sceneMessages.selectingSource);
                               setSimulation({
                                 ...simulation,
                                 radiation: option.mode,
@@ -1687,7 +1737,9 @@ export default function ExperimentExplorer() {
                             type="button"
                           >
                             <strong>{option.label}</strong>
-                            <span>{option.helper}</span>
+                            <span>
+                              {option.mode === 'xray' ? ui.pattern.xrayHelper : ui.pattern.neutronHelper}
+                            </span>
                             <small>lambda = {option.wavelength.toFixed(4)} A</small>
                           </button>
                         ))}
@@ -1697,23 +1749,23 @@ export default function ExperimentExplorer() {
                         <button
                           className="ghost-button"
                           onClick={() => {
-                            triggerScene('beam', 'Back to symmetry.');
+                            triggerScene('beam', ui.sceneMessages.backToSymmetry);
                             setCurrentStep(2);
                             setSymmetryPage(1);
                           }}
                           type="button"
                         >
-                          Back to symmetry
+                          {ui.pattern.backToSymmetry}
                         </button>
                         <button
                           className="primary-button"
                           onClick={() => {
-                            triggerScene('beam', 'Source locked. Next: wavelength.');
+                            triggerScene('beam', ui.sceneMessages.sourceLocked);
                             setPatternPage(1);
                           }}
                           type="button"
                         >
-                          Continue to wavelength
+                          {ui.pattern.continueToWavelength}
                         </button>
                       </div>
                     </>
@@ -1722,30 +1774,32 @@ export default function ExperimentExplorer() {
                   {patternPage === 1 ? (
                     <>
                       <TeachingCard
-                        label={COPY.lessons.pattern[1].label}
-                        title={COPY.lessons.pattern[1].title}
-                        text={COPY.lessons.pattern[1].text}
-                        tip={COPY.lessons.pattern[1].tip}
+                        glossary={SCIENCE_GLOSSARY[language]}
+                        glossaryPrompt={ui.meta.glossaryPrompt}
+                        label={copy.lessons.pattern[1].label}
+                        title={copy.lessons.pattern[1].title}
+                        text={copy.lessons.pattern[1].text}
+                        tip={copy.lessons.pattern[1].tip}
                         terms={PATTERN_PAGE_TERMS[1]}
                         onOpenTerm={setActiveGlossaryTerm}
                       />
 
                       <div className="control-card simulation-card">
                         <div className="field-stack">
-                          <span>Selected source</span>
+                          <span>{ui.pattern.selectedSource}</span>
                           <strong>
-                            {simulation.radiation === 'xray' ? 'X-ray source' : 'Neutron source'}
+                            {simulation.radiation === 'xray' ? ui.pattern.xraySource : ui.pattern.neutronSource}
                           </strong>
                         </div>
                         <label className="field-stack">
-                          <span>Wavelength lambda (A)</span>
+                          <span>{ui.pattern.wavelengthLabel}</span>
                           <input
                             type="number"
                             min={SIMULATION_INPUT_RULES.wavelength.min}
                             max={SIMULATION_INPUT_RULES.wavelength.max}
                             step={SIMULATION_INPUT_RULES.wavelength.step}
                             value={simulation.wavelength}
-                            {...getSceneHandlers('beam', 'Tuning the beam wavelength.')}
+                            {...getSceneHandlers('beam', ui.sceneMessages.tuningWavelength)}
                             onChange={(event) =>
                               setSimulation({
                                 ...simulation,
@@ -1760,8 +1814,11 @@ export default function ExperimentExplorer() {
                           />
                         </label>
                         <p className="range-note">
-                          Simulation window: {simulation.twoThetaMin} deg to{' '}
-                          {simulation.twoThetaMax} deg with a {simulation.step} deg grid.
+                          {formatInterfaceText(ui.pattern.simulationWindow, {
+                            min: simulation.twoThetaMin,
+                            max: simulation.twoThetaMax,
+                            step: simulation.step,
+                          })}
                         </p>
                       </div>
 
@@ -1771,22 +1828,22 @@ export default function ExperimentExplorer() {
                         <button
                           className="ghost-button"
                           onClick={() => {
-                            triggerScene('beam', 'Returning to the source selection.');
+                            triggerScene('beam', ui.sceneMessages.returningToSource);
                             setPatternPage(0);
                           }}
                           type="button"
                         >
-                          Back to source
+                          {ui.pattern.backToSource}
                         </button>
                         <button
                           className="primary-button"
                           onClick={() => {
-                            triggerScene('beam', 'Wavelength ready. Next: resolution.');
+                            triggerScene('beam', ui.sceneMessages.wavelengthReady);
                             setPatternPage(2);
                           }}
                           type="button"
                         >
-                          Continue to resolution
+                          {ui.pattern.continueToResolution}
                         </button>
                       </div>
                     </>
@@ -1795,15 +1852,17 @@ export default function ExperimentExplorer() {
                   {patternPage === 2 ? (
                     <>
                       <TeachingCard
-                        label={COPY.lessons.pattern[2].label}
-                        title={COPY.lessons.pattern[2].title}
-                        text={COPY.lessons.pattern[2].text}
-                        tip={COPY.lessons.pattern[2].tip}
+                        glossary={SCIENCE_GLOSSARY[language]}
+                        glossaryPrompt={ui.meta.glossaryPrompt}
+                        label={copy.lessons.pattern[2].label}
+                        title={copy.lessons.pattern[2].title}
+                        text={copy.lessons.pattern[2].text}
+                        tip={copy.lessons.pattern[2].tip}
                         terms={PATTERN_PAGE_TERMS[2]}
                         onOpenTerm={setActiveGlossaryTerm}
                       />
 
-                      <div className="info-banner">{COPY.callouts.experiment}</div>
+                      <div className="info-banner">{copy.callouts.experiment}</div>
 
                       <div className="control-card simulation-card">
                         <div className="cell-grid compact-grid">
@@ -1820,7 +1879,7 @@ export default function ExperimentExplorer() {
                                 max={SIMULATION_INPUT_RULES[field].max}
                                 step={SIMULATION_INPUT_RULES[field].step}
                                 value={simulation[field]}
-                                {...getSceneHandlers('beam', 'Updating the detector resolution.')}
+                                {...getSceneHandlers('beam', ui.sceneMessages.updatingResolution)}
                                 onChange={(event) =>
                                   setSimulation({
                                     ...simulation,
@@ -1837,16 +1896,17 @@ export default function ExperimentExplorer() {
                           ))}
                         </div>
                         <p className="range-note">
-                          The app checks the peak width across the whole 5 to 160 deg range before
-                          unlocking the final figure.
+                          {ui.pattern.resolutionCheck}
                         </p>
                         <div className="glossary-chip-row compact">
-                          <span>Resolution theory:</span>
+                          <span>{ui.pattern.resolutionTheory}</span>
                           <GlossaryChip
+                            glossary={SCIENCE_GLOSSARY[language]}
                             onOpen={setActiveGlossaryTerm}
                             term="cagliotiRelation"
                           />
                           <GlossaryChip
+                            glossary={SCIENCE_GLOSSARY[language]}
                             onOpen={setActiveGlossaryTerm}
                             term="cagliotiGaussianProfile"
                           />
@@ -1859,22 +1919,22 @@ export default function ExperimentExplorer() {
                         <button
                           className="ghost-button"
                           onClick={() => {
-                            triggerScene('beam', 'Returning to wavelength.');
+                            triggerScene('beam', ui.sceneMessages.returningToWavelength);
                             setPatternPage(1);
                           }}
                           type="button"
                         >
-                          Back to wavelength
+                          {ui.pattern.backToWavelength}
                         </button>
                         <button
                           className="primary-button"
                           onClick={() => {
-                            triggerScene('beam', 'Experiment configured. Showing the detector.');
+                            triggerScene('beam', ui.sceneMessages.showingDetector);
                             setPatternPage(3);
                           }}
                           type="button"
                         >
-                          Show the pattern
+                          {ui.pattern.showPattern}
                         </button>
                       </div>
                     </>
@@ -1883,24 +1943,30 @@ export default function ExperimentExplorer() {
                   {patternPage === 3 ? (
                     <>
                       <TeachingCard
-                        label={COPY.lessons.pattern[3].label}
-                        title={COPY.lessons.pattern[3].title}
-                        text={COPY.lessons.pattern[3].text}
-                        tip={COPY.lessons.pattern[3].tip}
+                        glossary={SCIENCE_GLOSSARY[language]}
+                        glossaryPrompt={ui.meta.glossaryPrompt}
+                        label={copy.lessons.pattern[3].label}
+                        title={copy.lessons.pattern[3].title}
+                        text={copy.lessons.pattern[3].text}
+                        tip={copy.lessons.pattern[3].tip}
                         terms={PATTERN_PAGE_TERMS[3]}
                         onOpenTerm={setActiveGlossaryTerm}
                       />
 
                       <div className="pattern-summary">
                         <span>
-                          Source:{' '}
-                          <strong>{simulation.radiation === 'xray' ? 'X-ray' : 'Neutron'}</strong>
+                          {ui.pattern.sourceSummary}:{' '}
+                          <strong>
+                            {simulation.radiation === 'xray'
+                              ? ui.pattern.xraySource
+                              : ui.pattern.neutronSource}
+                          </strong>
                         </span>
                         <span>
-                          lambda: <strong>{simulation.wavelength.toFixed(4)} A</strong>
+                          {ui.pattern.wavelengthSummary}: <strong>{simulation.wavelength.toFixed(4)} A</strong>
                         </span>
                         <span>
-                          Resolution:{' '}
+                          {ui.pattern.resolutionSummary}:{' '}
                           <strong>
                             U {simulation.U} / V {simulation.V} / W {simulation.W}
                           </strong>
@@ -1911,6 +1977,7 @@ export default function ExperimentExplorer() {
                         <div className="control-card pattern-plot-card">
                           <PowderPlot
                             pattern={pattern}
+                            uiText={ui.plot}
                             onInteract={(message) => triggerScene('beam', message)}
                           />
                           {!patternHasResult ? <MessageStack messages={pattern.messages} /> : null}
@@ -1918,11 +1985,8 @@ export default function ExperimentExplorer() {
 
                         <div className="reflection-card compact-reflection-card">
                           <div className="panel-heading compact">
-                            <h3>Most visible reflections</h3>
-                            <p>
-                              The strongest peaks help connect crystal symmetry to the detector
-                              fingerprint.
-                            </p>
+                            <h3>{ui.pattern.reflectionsTitle}</h3>
+                            <p>{ui.pattern.reflectionsText}</p>
                           </div>
                           <div className="reflection-table">
                             <div className="reflection-head">
@@ -1945,7 +2009,7 @@ export default function ExperimentExplorer() {
                               </div>
                             ))}
                             {topReflections.length === 0 ? (
-                              <p className="range-note">No peaks yet.</p>
+                              <p className="range-note">{ui.pattern.noPeaks}</p>
                             ) : null}
                           </div>
                           {patternHasResult ? <MessageStack messages={pattern.messages} /> : null}
@@ -1956,19 +2020,19 @@ export default function ExperimentExplorer() {
                         <button
                           className="ghost-button"
                           onClick={() => {
-                            triggerScene('beam', 'Returning to resolution.');
+                            triggerScene('beam', ui.sceneMessages.returningToResolution);
                             setPatternPage(2);
                           }}
                           type="button"
                         >
-                          Back to resolution
+                          {ui.pattern.backToResolution}
                         </button>
                         <button
                           className="primary-button"
                           onClick={finishExperiment}
                           type="button"
                         >
-                          Finish experiment
+                          {ui.pattern.finishExperiment}
                         </button>
                       </div>
                     </>

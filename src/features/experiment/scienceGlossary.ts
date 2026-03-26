@@ -9,7 +9,7 @@ export type GlossaryKey =
   | 'cagliotiRelation'
   | 'cagliotiGaussianProfile';
 
-export const SCIENCE_GLOSSARY: Record<
+const ENGLISH_GLOSSARY: Record<
   GlossaryKey,
   {
     label: string;
@@ -111,3 +111,9 @@ export const SCIENCE_GLOSSARY: Record<
     ],
   },
 };
+
+export const SCIENCE_GLOSSARY = {
+  en: ENGLISH_GLOSSARY,
+  fr: ENGLISH_GLOSSARY,
+  ar: ENGLISH_GLOSSARY,
+} as const;
