@@ -1,0 +1,41 @@
+@import '@fontsource/bricolage-grotesque/700.css';
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+
+:root {
+  font-family: 'IBM Plex Sans', sans-serif;
+  color: #081223;
+  background:
+    radial-gradient(circle at top left, rgba(250, 204, 21, 0.25), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.2), transparent 34%),
+    linear-gradient(180deg, #fffaf1 0%, #fff 36%, #eef7ff 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
