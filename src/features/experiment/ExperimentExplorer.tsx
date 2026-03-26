@@ -74,6 +74,29 @@ const FIELD_LABELS: Record<keyof UnitCellInput, string> = {
   gamma: 'gamma (deg)',
 };
 
+const CELL_INPUT_RULES: Record<
+  keyof UnitCellInput,
+  {
+    min: number;
+    max: number;
+    step: string;
+  }
+> = {
+  a: { min: 0.5, max: 50, step: '0.01' },
+  b: { min: 0.5, max: 50, step: '0.01' },
+  c: { min: 0.5, max: 50, step: '0.01' },
+  alpha: { min: 1, max: 179, step: '0.1' },
+  beta: { min: 1, max: 179, step: '0.1' },
+  gamma: { min: 1, max: 179, step: '0.1' },
+};
+
+const SIMULATION_INPUT_RULES = {
+  wavelength: { min: 0.1, max: 10, step: '0.0001' },
+  U: { min: 0, max: 2, step: '0.001' },
+  V: { min: -2, max: 2, step: '0.001' },
+  W: { min: 0, max: 2, step: '0.001' },
+} as const;
+
 type SceneCueState = Record<
   SceneVariant,
   {
@@ -82,8 +105,30 @@ type SceneCueState = Record<
   }
 >;
 
+type ExperimentStep = 1 | 2 | 3;
 type SymmetryPage = 0 | 1;
 type PatternPage = 0 | 1 | 2 | 3;
+type HistoryMode = 'push' | 'replace';
+
+const APP_ROUTES = {
+  home: '#home',
+  formula: '#formula',
+  symmetryLattice: '#symmetry-lattice',
+  symmetryCell: '#symmetry-cell',
+  patternSource: '#pattern-source',
+  patternWavelength: '#pattern-wavelength',
+  patternResolution: '#pattern-resolution',
+  patternResult: '#pattern-result',
+} as const;
+
+type AppRoute = (typeof APP_ROUTES)[keyof typeof APP_ROUTES];
+
+type RouteState = {
+  started: boolean;
+  currentStep: ExperimentStep;
+  symmetryPage: SymmetryPage;
+  patternPage: PatternPage;
+};
 
 const INITIAL_SCENE_CUES: SceneCueState = {
   synthesis: {
@@ -122,6 +167,59 @@ function createInitialSceneCues(): SceneCueState {
 
 function createInitialAtoms() {
   return [createAtomSeed(1)];
+}
+
+function getRouteFromState({
+  started,
+  currentStep,
+  symmetryPage,
+  patternPage,
+}: RouteState): AppRoute {
+  if (!started) {
+    return APP_ROUTES.home;
+  }
+
+  if (currentStep === 1) {
+    return APP_ROUTES.formula;
+  }
+
+  if (currentStep === 2) {
+    return symmetryPage === 0 ? APP_ROUTES.symmetryLattice : APP_ROUTES.symmetryCell;
+  }
+
+  switch (patternPage) {
+    case 0:
+      return APP_ROUTES.patternSource;
+    case 1:
+      return APP_ROUTES.patternWavelength;
+    case 2:
+      return APP_ROUTES.patternResolution;
+    case 3:
+    default:
+      return APP_ROUTES.patternResult;
+  }
+}
+
+function getStateFromRoute(route: string | null | undefined): RouteState {
+  switch (route) {
+    case APP_ROUTES.formula:
+      return { started: true, currentStep: 1, symmetryPage: 0, patternPage: 0 };
+    case APP_ROUTES.symmetryLattice:
+      return { started: true, currentStep: 2, symmetryPage: 0, patternPage: 0 };
+    case APP_ROUTES.symmetryCell:
+      return { started: true, currentStep: 2, symmetryPage: 1, patternPage: 0 };
+    case APP_ROUTES.patternSource:
+      return { started: true, currentStep: 3, symmetryPage: 1, patternPage: 0 };
+    case APP_ROUTES.patternWavelength:
+      return { started: true, currentStep: 3, symmetryPage: 1, patternPage: 1 };
+    case APP_ROUTES.patternResolution:
+      return { started: true, currentStep: 3, symmetryPage: 1, patternPage: 2 };
+    case APP_ROUTES.patternResult:
+      return { started: true, currentStep: 3, symmetryPage: 1, patternPage: 3 };
+    case APP_ROUTES.home:
+    default:
+      return { started: false, currentStep: 1, symmetryPage: 0, patternPage: 0 };
+  }
 }
 
 function updateAtom(atoms: AtomSeed[], atomId: string, patch: Partial<AtomSeed>) {
@@ -791,7 +889,7 @@ function TeachingCard({
 
 export default function ExperimentExplorer() {
   const [started, setStarted] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState<ExperimentStep>(1);
   const [symmetryPage, setSymmetryPage] = useState<SymmetryPage>(0);
   const [patternPage, setPatternPage] = useState<PatternPage>(0);
   const [atoms, setAtoms] = useState<AtomSeed[]>(createInitialAtoms);
@@ -806,9 +904,12 @@ export default function ExperimentExplorer() {
   const [sceneCues, setSceneCues] = useState<SceneCueState>(createInitialSceneCues);
   const [activeGlossaryTerm, setActiveGlossaryTerm] = useState<GlossaryKey | null>(null);
   const [viewJumpTick, setViewJumpTick] = useState(0);
+  const [routeSyncReady, setRouteSyncReady] = useState(false);
   const formulaStepRef = useRef<HTMLElement | null>(null);
   const symmetryStepRef = useRef<HTMLElement | null>(null);
   const patternStepRef = useRef<HTMLElement | null>(null);
+  const heroRef = useRef<HTMLElement | null>(null);
+  const historyModeRef = useRef<HistoryMode>('push');
 
   const formula = buildFormulaFromAtoms(atoms);
   const atomMessages = validateAtomSeeds(atoms);
@@ -819,6 +920,12 @@ export default function ExperimentExplorer() {
   const stepThreeReady = atomStepReady && validation.valid;
   const patternHasResult = pattern.curve.length > 0;
   const patternSetupMessages = pattern.messages.filter((message) => message.tone !== 'info');
+  const currentRoute = getRouteFromState({
+    started,
+    currentStep,
+    symmetryPage,
+    patternPage,
+  });
 
   useEffect(() => {
     if (!bravais) {
@@ -873,6 +980,51 @@ export default function ExperimentExplorer() {
       );
     });
   }, [atomStepReady, atoms, bravais, cell, selectedSpaceGroup, simulation, spaceGroupNumber]);
+
+  useEffect(() => {
+    const routeState = getStateFromRoute(window.location.hash || APP_ROUTES.home);
+    setStarted(routeState.started);
+    setCurrentStep(routeState.currentStep);
+    setSymmetryPage(routeState.symmetryPage);
+    setPatternPage(routeState.patternPage);
+    window.history.replaceState({ route: getRouteFromState(routeState) }, '', getRouteFromState(routeState));
+    setRouteSyncReady(true);
+
+    const handlePopState = () => {
+      const nextRouteState = getStateFromRoute(window.location.hash || APP_ROUTES.home);
+      historyModeRef.current = 'replace';
+      setStarted(nextRouteState.started);
+      setCurrentStep(nextRouteState.currentStep);
+      setSymmetryPage(nextRouteState.symmetryPage);
+      setPatternPage(nextRouteState.patternPage);
+      setViewJumpTick((current) => current + 1);
+      setActiveGlossaryTerm(null);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (!routeSyncReady) {
+      return;
+    }
+
+    const mode = historyModeRef.current;
+    historyModeRef.current = 'push';
+
+    if (window.location.hash === currentRoute) {
+      window.history.replaceState({ route: currentRoute }, '', currentRoute);
+      return;
+    }
+
+    if (mode === 'replace') {
+      window.history.replaceState({ route: currentRoute }, '', currentRoute);
+      return;
+    }
+
+    window.history.pushState({ route: currentRoute }, '', currentRoute);
+  }, [currentRoute, routeSyncReady]);
 
   useEffect(() => {
     if (!started) {
@@ -932,7 +1084,7 @@ export default function ExperimentExplorer() {
     onPointerDown: () => triggerScene(variant, message),
   });
 
-  const resetExperiment = () => {
+  const clearExperimentState = () => {
     setAtoms(createInitialAtoms());
     setBravais(null);
     setSpaceGroupNumber(null);
@@ -945,12 +1097,28 @@ export default function ExperimentExplorer() {
     setPatternPage(0);
     setSceneCues(createInitialSceneCues());
     setActiveGlossaryTerm(null);
+  };
+
+  const launchFreshExperiment = () => {
+    historyModeRef.current = started ? 'replace' : 'push';
+    clearExperimentState();
     setStarted(true);
     setViewJumpTick((current) => current + 1);
   };
 
+  const finishExperiment = () => {
+    historyModeRef.current = 'replace';
+    clearExperimentState();
+    setStarted(false);
+    heroRef.current?.scrollIntoView?.({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  };
+
   const applyDemo = (name: 'nacl' | 'silicon') => {
     const demo = createDemoStructure(name);
+    historyModeRef.current = started ? 'replace' : 'push';
     setAtoms(demo.atoms);
     setBravais(demo.bravais);
     setSpaceGroupNumber(demo.spaceGroupNumber);
@@ -976,7 +1144,7 @@ export default function ExperimentExplorer() {
 
   return (
     <main className="experiment-app">
-      <section className="hero-shell">
+      <section className="hero-shell" ref={heroRef}>
         <div className="hero-copy">
           <p className="eyebrow">{COPY.intro.eyebrow}</p>
           <h1>{COPY.intro.title}</h1>
@@ -989,7 +1157,7 @@ export default function ExperimentExplorer() {
             ))}
           </div>
           <div className="hero-actions">
-            <button className="primary-button" onClick={resetExperiment} type="button">
+            <button className="primary-button" onClick={launchFreshExperiment} type="button">
               {COPY.intro.cta}
             </button>
             <button
@@ -1031,7 +1199,9 @@ export default function ExperimentExplorer() {
               active={currentStep === 1}
               unlocked
               label="1. Formula"
-              onClick={() => setCurrentStep(1)}
+              onClick={() => {
+                setCurrentStep(1);
+              }}
             />
             <StepBadge
               active={currentStep === 2}
@@ -1126,6 +1296,7 @@ export default function ExperimentExplorer() {
                         {(['x', 'y', 'z'] as const).map((axis) => (
                           <input
                             key={axis}
+                            aria-label={`Atom ${index + 1} ${axis} coordinate`}
                             type="number"
                             min="0"
                             max="1"
@@ -1334,11 +1505,9 @@ export default function ExperimentExplorer() {
                                   <span>{FIELD_LABELS[field]}</span>
                                   <input
                                     type="number"
-                                    step={
-                                      field === 'a' || field === 'b' || field === 'c'
-                                        ? '0.001'
-                                        : '0.1'
-                                    }
+                                    min={CELL_INPUT_RULES[field].min}
+                                    max={CELL_INPUT_RULES[field].max}
+                                    step={CELL_INPUT_RULES[field].step}
                                     value={editable ? cell[field] : lockedCell[field]}
                                     disabled={!editable}
                                     {...getSceneHandlers('thinking', 'Tuning the cell.')}
@@ -1544,7 +1713,9 @@ export default function ExperimentExplorer() {
                           <span>Wavelength lambda (A)</span>
                           <input
                             type="number"
-                            step="0.0001"
+                            min={SIMULATION_INPUT_RULES.wavelength.min}
+                            max={SIMULATION_INPUT_RULES.wavelength.max}
+                            step={SIMULATION_INPUT_RULES.wavelength.step}
                             value={simulation.wavelength}
                             {...getSceneHandlers('beam', 'Tuning the beam wavelength.')}
                             onChange={(event) =>
@@ -1612,7 +1783,9 @@ export default function ExperimentExplorer() {
                               <span>{label}</span>
                               <input
                                 type="number"
-                                step="0.001"
+                                min={SIMULATION_INPUT_RULES[field].min}
+                                max={SIMULATION_INPUT_RULES[field].max}
+                                step={SIMULATION_INPUT_RULES[field].step}
                                 value={simulation[field]}
                                 {...getSceneHandlers('beam', 'Updating the detector resolution.')}
                                 onChange={(event) =>
@@ -1751,6 +1924,13 @@ export default function ExperimentExplorer() {
                           type="button"
                         >
                           Back to resolution
+                        </button>
+                        <button
+                          className="primary-button"
+                          onClick={finishExperiment}
+                          type="button"
+                        >
+                          Finish experiment
                         </button>
                       </div>
                     </>

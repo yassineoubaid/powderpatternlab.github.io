@@ -106,13 +106,32 @@
 .hero-badge,
 .formula-strip {
   border-radius: 999px;
-  background: rgba(8, 18, 35, 0.06);
   color: #081223;
 }
 
 .hero-badge {
-  padding: 0.55rem 0.9rem;
-  font-size: 0.9rem;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  background: rgba(255, 255, 255, 0.62);
+  color: #334155;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.hero-badge::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f97316, #facc15);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.12);
 }
 
 .hero-actions {
@@ -895,6 +914,7 @@
 }
 
 .formula-strip {
+  background: rgba(8, 18, 35, 0.06);
   justify-content: space-between;
   align-items: center;
   padding: 0.95rem 1.1rem;
