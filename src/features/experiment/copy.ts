@@ -8,7 +8,7 @@ export const COPY_BY_LANGUAGE = {
       subtitle:
         'Build a crystal, choose its symmetry, and watch the powder pattern appear like a live beamline story.',
       cta: 'Launch the experiment',
-      badges: ['Science communication', 'Powder diffraction', 'Teen-friendly guide'],
+      badges: ['Science communication', 'Powder diffraction', 'Beginner-friendly guide'],
       demos: {
         nacl: 'Try NaCl demo',
         silicon: 'Try Si demo',
