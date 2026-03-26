@@ -112,8 +112,214 @@ const ENGLISH_GLOSSARY: Record<
   },
 };
 
+const FRENCH_GLOSSARY: Record<
+  GlossaryKey,
+  {
+    label: string;
+    summary: string;
+    equations?: string[];
+    details: string[];
+  }
+> = {
+  asymmetricUnit: {
+    label: 'Unité asymétrique',
+    summary:
+      "L'unité asymétrique est le plus petit ensemble de positions atomiques qui génère toute la structure cristalline après application des opérations du groupe d'espace.",
+    details: [
+      "Vous n'entrez les atomes qu'une seule fois dans l'unité asymétrique. L'application applique ensuite les opérations de symétrie choisies pour générer toutes les positions équivalentes dans la maille.",
+      "Si deux atomes différents de l'unité asymétrique se retrouvent sur le même site cristallographique après développement par symétrie, la structure est incohérente et doit être corrigée.",
+    ],
+  },
+  fractionalCoordinates: {
+    label: 'Coordonnées fractionnaires',
+    summary:
+      "Les coordonnées fractionnaires expriment la position d'un atome comme une fraction des vecteurs de base de la maille, et non comme une distance cartésienne absolue.",
+    equations: ['r = x a + y b + z c'],
+    details: [
+      "Ici, r est le vecteur position de l'atome, tandis que a, b et c sont les vecteurs du réseau de la maille.",
+      "Des coordonnées comprises entre 0 et 1 placent l'atome dans une maille de référence. Des valeurs en dehors de cet intervalle décrivent des positions équivalentes dans les mailles voisines.",
+    ],
+  },
+  bravaisLattice: {
+    label: 'Réseau de Bravais',
+    summary:
+      "Un réseau de Bravais est le squelette translationnel d'un cristal : un réseau infini de points équivalents obtenu en répétant une maille dans l'espace.",
+    equations: ['R = n1 a + n2 b + n3 c, with n1, n2, n3 in Z'],
+    details: [
+      'Les 14 réseaux de Bravais sont les réseaux translationnels distincts autorisés en cristallographie tridimensionnelle.',
+      "Le réseau de Bravais fixe le centrage et la famille cristalline avant l'ajout des symétries plus détaillées du groupe d'espace.",
+    ],
+  },
+  spaceGroup: {
+    label: "Groupe d'espace",
+    summary:
+      "Un groupe d'espace est la description complète de la symétrie d'un cristal, combinant translations, rotations, miroirs, plans de glissement et axes hélicoïdaux.",
+    equations: ['g = (R | t)', "r' = R r + t"],
+    details: [
+      'La matrice R représente la partie rotationnelle de l’opération de symétrie et t sa partie translationnelle.',
+      "L'application de toutes les opérations du groupe d'espace à l'unité asymétrique génère le motif complet dans la maille et impose aussi les règles d'extinction en diffraction.",
+    ],
+  },
+  wavelength: {
+    label: "Longueur d'onde",
+    summary:
+      "La longueur d'onde est la période spatiale du rayonnement incident et elle contrôle la position des pics de Bragg en 2theta.",
+    equations: ['lambda = c / nu'],
+    details: [
+      "Pour une distance interréticulaire d fixée, modifier la longueur d'onde déplace l'angle de diffraction selon la loi de Bragg.",
+      "Dans cette application, la longueur d'onde est saisie en angströms afin de correspondre directement aux distances d du cristal.",
+    ],
+  },
+  braggLaw: {
+    label: 'Loi de Bragg',
+    summary:
+      'La loi de Bragg donne la condition de diffraction pour une interférence constructive entre familles de plans réticulaires.',
+    equations: ['n lambda = 2 d sin(theta)', '2theta = 2 theta'],
+    details: [
+      'd est la distance interplanaire, theta est l’angle de Bragg, et le détecteur rapporte généralement l’angle de diffusion 2theta.',
+      'En diffraction sur poudre, chaque réflexion hkl autorisée apparaît à la valeur de 2theta qui satisfait la loi de Bragg pour son espacement d.',
+    ],
+  },
+  twoTheta: {
+    label: '2theta',
+    summary:
+      "2theta est l'angle de diffusion mesuré entre le faisceau incident et le faisceau diffracté dans une expérience typique de diffraction sur poudre.",
+    equations: ['2theta = angle(incident beam, diffracted beam)'],
+    details: [
+      'La plupart des diffractomètres de laboratoire et des lignes de poudre synchrotron tracent l’intensité en fonction de 2theta.',
+      "La position des pics en 2theta reflète la géométrie du réseau réciproque, tandis que leurs intensités reflètent le facteur de structure et les corrections instrumentales.",
+    ],
+  },
+  cagliotiRelation: {
+    label: 'Relation de Caglioti',
+    summary:
+      "La relation de Caglioti modélise l'évolution de l'élargissement instrumental avec l'angle de diffusion dans de nombreux instruments de diffraction sur poudre à longueur d'onde fixe.",
+    equations: ['H^2 = U tan^2(theta) + V tan(theta) + W'],
+    details: [
+      'H est la largeur à mi-hauteur du profil de pic, exprimée en unités angulaires.',
+      "U, V et W sont des coefficients de résolution instrumentale. Ils changent la largeur du pic quand theta varie, mais ne déplacent pas sa position de Bragg.",
+    ],
+  },
+  cagliotiGaussianProfile: {
+    label: 'Profil gaussien de type Caglioti',
+    summary:
+      "Un profil gaussien de type Caglioti combine la loi de largeur de Caglioti avec une forme de pic gaussienne afin d'élargir les réflexions de Bragg idéales en un diagramme de poudre continu.",
+    equations: [
+      'G(Delta) = exp(-(Delta^2) / (2 sigma^2))',
+      'sigma = H / (2 sqrt(2 ln 2))',
+    ],
+    details: [
+      "Delta est la distance angulaire à la position de Bragg et sigma est l'écart type gaussien obtenu à partir de la largeur à mi-hauteur H.",
+      "Cette application utilise la relation de Caglioti pour calculer H(theta), la convertit en sigma, puis élargit chaque réflexion dans le profil affiché.",
+    ],
+  },
+};
+
+const ARABIC_GLOSSARY: Record<
+  GlossaryKey,
+  {
+    label: string;
+    summary: string;
+    equations?: string[];
+    details: string[];
+  }
+> = {
+  asymmetricUnit: {
+    label: 'الوحدة غير المتماثلة',
+    summary:
+      'الوحدة غير المتماثلة هي أصغر مجموعة من المواقع الذرية التي تولّد البنية البلورية كاملة بعد تطبيق جميع عمليات مجموعة الفراغ.',
+    details: [
+      'أنت تدخل الذرات مرة واحدة فقط داخل الوحدة غير المتماثلة، ثم يطبق التطبيق عمليات التناظر المختارة لتوليد جميع المواقع المكافئة داخل الخلية.',
+      'إذا انهارت ذرتان مختلفتان من الوحدة غير المتماثلة إلى الموقع البلوري نفسه بعد التوسيع بالتناظر، تصبح البنية غير منسجمة ويجب تعديلها.',
+    ],
+  },
+  fractionalCoordinates: {
+    label: 'الإحداثيات الكسرية',
+    summary:
+      'تعبّر الإحداثيات الكسرية عن موضع الذرة كنسبة من متجهات أساس الخلية، وليس كمسافة ديكارتية مطلقة.',
+    equations: ['r = x a + y b + z c'],
+    details: [
+      'هنا يمثّل r متجه موضع الذرة، بينما تمثل a وb وc متجهات شبكة الخلية.',
+      'القيم بين 0 و1 تضع الذرة داخل خلية مرجعية واحدة. أما القيم خارج هذا المجال فتمثل مواقع مكافئة في الخلايا المجاورة.',
+    ],
+  },
+  bravaisLattice: {
+    label: 'شبكة برافاي',
+    summary:
+      'شبكة برافاي هي الهيكل الانتقالي للبلورة: ترتيب لا نهائي من النقاط الشبكية المكافئة الناتج من تكرار خلية واحدة في الفضاء.',
+    equations: ['R = n1 a + n2 b + n3 c, with n1, n2, n3 in Z'],
+    details: [
+      'شبكات برافاي الأربع عشرة هي الشبكات الانتقالية المختلفة المسموح بها في علم البلورات ثلاثي الأبعاد.',
+      'تحدد شبكة برافاي التمركز والعائلة البلورية قبل إضافة تناظرات أكثر تفصيلاً من مجموعة الفراغ.',
+    ],
+  },
+  spaceGroup: {
+    label: 'مجموعة الفراغ',
+    summary:
+      'مجموعة الفراغ هي الوصف الكامل لتناظر البلورة، إذ تجمع بين الانتقالات والدورانات والمرايا ومستويات الانزلاق والمحاور اللولبية.',
+    equations: ['g = (R | t)', "r' = R r + t"],
+    details: [
+      'تمثل المصفوفة R الجزء الدوراني من عملية التناظر، بينما يمثل t الجزء الانتقالي.',
+      'إن تطبيق جميع عمليات مجموعة الفراغ على الوحدة غير المتماثلة يولد البنية الكاملة داخل الخلية ويفرض أيضاً قواعد الانطفاء في الحيود.',
+    ],
+  },
+  wavelength: {
+    label: 'الطول الموجي',
+    summary:
+      'الطول الموجي هو الفترة المكانية للإشعاع الساقط، وهو الذي يحدد مواضع قمم براج على محور 2theta.',
+    equations: ['lambda = c / nu'],
+    details: [
+      'عند ثبات المسافة البينية d، يؤدي تغيير الطول الموجي إلى تغيير زاوية الحيود وفق قانون براج.',
+      'في هذا التطبيق يُدخل الطول الموجي بوحدة الأنغستروم كي يطابق مباشرة مسافات d في البلورة.',
+    ],
+  },
+  braggLaw: {
+    label: 'قانون براج',
+    summary:
+      'يعطي قانون براج شرط الحيود الذي يؤدي إلى التداخل البنّاء من عائلات المستويات الشبكية.',
+    equations: ['n lambda = 2 d sin(theta)', '2theta = 2 theta'],
+    details: [
+      'تمثل d المسافة بين المستويات، وtheta زاوية براج، بينما يعرض الكاشف عادة زاوية التبعثر 2theta.',
+      'في حيود المساحيق، تظهر كل انعكاسة hkl مسموحة عند قيمة 2theta التي تحقق قانون براج لمسافتها d.',
+    ],
+  },
+  twoTheta: {
+    label: '2theta',
+    summary:
+      '2theta هي زاوية التبعثر المقاسة بين الحزمة الساقطة والحزمة المحيودة في تجربة حيود مسحوق نموذجية.',
+    equations: ['2theta = angle(incident beam, diffracted beam)'],
+    details: [
+      'تعرض معظم أجهزة حيود المساحيق المخبرية وخطوط السنكروترون الشدة بدلالة 2theta.',
+      'تعكس مواضع القمم على محور 2theta هندسة الشبكة العكسية، بينما تعكس شداتها عامل البنية والتصحيحات الجهازية.',
+    ],
+  },
+  cagliotiRelation: {
+    label: 'علاقة كالييوتي',
+    summary:
+      'تصف علاقة كالييوتي كيف يتغير الاتساع الآلي مع زاوية التبعثر في كثير من أجهزة حيود المساحيق ذات الطول الموجي الثابت.',
+    equations: ['H^2 = U tan^2(theta) + V tan(theta) + W'],
+    details: [
+      'يمثل H العرض عند نصف الارتفاع لقمة الحيود بوحدات زاوية.',
+      'تمثل U وV وW معاملات دقة الجهاز. وهي تغيّر عرض القمة عندما تتغير theta، لكنها لا تحرك موضع براج نفسه.',
+    ],
+  },
+  cagliotiGaussianProfile: {
+    label: 'ملف غاوسي بأسلوب كالييوتي',
+    summary:
+      'يجمع الملف الغاوسي بأسلوب كالييوتي بين قانون عرض كالييوتي وشكل قمة غاوسي من أجل توسيع انعكاسات براج المثالية إلى نمط مسحوق مستمر.',
+    equations: [
+      'G(Delta) = exp(-(Delta^2) / (2 sigma^2))',
+      'sigma = H / (2 sqrt(2 ln 2))',
+    ],
+    details: [
+      'يمثل Delta البعد الزاوي عن موضع براج، وتمثل sigma الانحراف المعياري الغاوسي المشتق من العرض عند نصف الارتفاع H.',
+      'يستخدم هذا التطبيق علاقة كالييوتي لحساب H(theta)، ثم يحولها إلى sigma، وبعد ذلك يوسّع كل انعكاسة إلى الملف المعروض.',
+    ],
+  },
+};
+
 export const SCIENCE_GLOSSARY = {
   en: ENGLISH_GLOSSARY,
-  fr: ENGLISH_GLOSSARY,
-  ar: ENGLISH_GLOSSARY,
+  fr: FRENCH_GLOSSARY,
+  ar: ARABIC_GLOSSARY,
 } as const;
