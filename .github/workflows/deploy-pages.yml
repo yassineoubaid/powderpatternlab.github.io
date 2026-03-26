@@ -19,7 +19,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      VITE_BASE_PATH: ${{ endsWith(github.event.repository.name, '.github.io') && '/' || format('/{0}/', github.event.repository.name) }}
+      VITE_BASE_PATH: /powderpatternlab.github.io/
     steps:
       - name: Checkout
         uses: actions/checkout@v4
