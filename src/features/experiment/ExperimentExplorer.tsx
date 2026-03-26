@@ -82,9 +82,9 @@ const CELL_INPUT_RULES: Record<
     step: string;
   }
 > = {
-  a: { min: 0.5, max: 50, step: '0.01' },
-  b: { min: 0.5, max: 50, step: '0.01' },
-  c: { min: 0.5, max: 50, step: '0.01' },
+  a: { min: 0.5, max: 20, step: '0.01' },
+  b: { min: 0.5, max: 20, step: '0.01' },
+  c: { min: 0.5, max: 20, step: '0.01' },
   alpha: { min: 1, max: 179, step: '0.1' },
   beta: { min: 1, max: 179, step: '0.1' },
   gamma: { min: 1, max: 179, step: '0.1' },
@@ -232,6 +232,19 @@ function formatNumber(value: number, digits = 3) {
 
 function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function parseBoundedNumber(rawValue: string, fallback: number, min: number, max: number) {
+  if (rawValue.trim() === '') {
+    return fallback;
+  }
+
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return clampNumber(parsed, min, max);
 }
 
 function buildTicks(min: number, max: number, count: number) {
@@ -960,7 +973,7 @@ export default function ExperimentExplorer() {
       );
       setValidation(nextValidation);
 
-      if (!atomStepReady || !nextValidation.valid) {
+      if (!atomStepReady || !nextValidation.valid || !started || currentStep !== 3) {
         setPattern(EMPTY_PATTERN);
         return;
       }
@@ -979,7 +992,17 @@ export default function ExperimentExplorer() {
         ),
       );
     });
-  }, [atomStepReady, atoms, bravais, cell, selectedSpaceGroup, simulation, spaceGroupNumber]);
+  }, [
+    atomStepReady,
+    atoms,
+    bravais,
+    cell,
+    currentStep,
+    selectedSpaceGroup,
+    simulation,
+    spaceGroupNumber,
+    started,
+  ]);
 
   useEffect(() => {
     const routeState = getStateFromRoute(window.location.hash || APP_ROUTES.home);
@@ -1306,7 +1329,7 @@ export default function ExperimentExplorer() {
                             onChange={(event) =>
                               setAtoms(
                                 updateAtom(atoms, atom.id, {
-                                  [axis]: Number(event.target.value),
+                                  [axis]: parseBoundedNumber(event.target.value, atom[axis], 0, 1),
                                 } as Partial<AtomSeed>),
                               )
                             }
@@ -1514,7 +1537,12 @@ export default function ExperimentExplorer() {
                                     onChange={(event) =>
                                       setCell({
                                         ...cell,
-                                        [field]: Number(event.target.value),
+                                        [field]: parseBoundedNumber(
+                                          event.target.value,
+                                          cell[field],
+                                          CELL_INPUT_RULES[field].min,
+                                          CELL_INPUT_RULES[field].max,
+                                        ),
                                       })
                                     }
                                   />
@@ -1721,7 +1749,12 @@ export default function ExperimentExplorer() {
                             onChange={(event) =>
                               setSimulation({
                                 ...simulation,
-                                wavelength: Number(event.target.value),
+                                wavelength: parseBoundedNumber(
+                                  event.target.value,
+                                  simulation.wavelength,
+                                  SIMULATION_INPUT_RULES.wavelength.min,
+                                  SIMULATION_INPUT_RULES.wavelength.max,
+                                ),
                               })
                             }
                           />
@@ -1791,7 +1824,12 @@ export default function ExperimentExplorer() {
                                 onChange={(event) =>
                                   setSimulation({
                                     ...simulation,
-                                    [field]: Number(event.target.value),
+                                    [field]: parseBoundedNumber(
+                                      event.target.value,
+                                      simulation[field],
+                                      SIMULATION_INPUT_RULES[field].min,
+                                      SIMULATION_INPUT_RULES[field].max,
+                                    ),
                                   } as SimulationSettings)
                                 }
                               />

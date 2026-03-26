@@ -177,4 +177,31 @@ describe('crystallography helpers', () => {
       narrow.curve[peakIndex + 2].intensity,
     );
   });
+
+  it('fails gracefully when a huge cell would create too many reflections', () => {
+    const structure = createDemoStructure('nacl');
+    const spaceGroup = getSpaceGroupByNumber(structure.spaceGroupNumber);
+    if (!spaceGroup) {
+      throw new Error('Expected F m -3 m to exist');
+    }
+
+    const oversizedStructure = {
+      atoms: structure.atoms,
+      bravais: structure.bravais,
+      spaceGroupNumber: structure.spaceGroupNumber,
+      cell: { a: 70, b: 70, c: 70, alpha: 90, beta: 90, gamma: 90 },
+    };
+
+    const validation = validateStructure(oversizedStructure, spaceGroup);
+    const pattern = simulatePowderPattern(
+      oversizedStructure,
+      spaceGroup,
+      validation,
+      DEFAULT_SIMULATION_SETTINGS,
+    );
+
+    expect(pattern.reflections).toHaveLength(0);
+    expect(pattern.curve).toHaveLength(0);
+    expect(pattern.messages[0]?.text).toMatch(/too many reflections/i);
+  });
 });

@@ -108,7 +108,7 @@ describe('ExperimentExplorer', () => {
 
     const aCell = screen.getByLabelText(/^a \(a\)$/i);
     expect(aCell).toHaveAttribute('min', '0.5');
-    expect(aCell).toHaveAttribute('max', '50');
+    expect(aCell).toHaveAttribute('max', '20');
     expect(aCell).toHaveAttribute('step', '0.01');
 
     await userEvent.click(screen.getByRole('button', { name: /continue to experiment/i }));
@@ -130,6 +130,19 @@ describe('ExperimentExplorer', () => {
     expect(vResolution).toHaveAttribute('min', '-2');
     expect(vResolution).toHaveAttribute('max', '2');
     expect(vResolution).toHaveAttribute('step', '0.001');
+  });
+
+  it('clamps oversized lattice values before they can freeze the live simulation', async () => {
+    render(<ExperimentExplorer />);
+
+    await userEvent.click(screen.getByRole('button', { name: /try nacl demo/i }));
+    await userEvent.click(screen.getByRole('button', { name: /continue to symmetry/i }));
+    await userEvent.click(screen.getByRole('button', { name: /continue to cell setup/i }));
+
+    const aCell = screen.getByLabelText(/^a \(a\)$/i);
+    fireEvent.change(aCell, { target: { value: '70' } });
+
+    expect(aCell).toHaveValue(20);
   });
 
   it('guides a demo structure all the way to the powder pattern', async () => {

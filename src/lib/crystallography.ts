@@ -21,6 +21,7 @@ import {
 const TAU = Math.PI * 2;
 const CANONICAL_PRECISION = 1e-5;
 const EPSILON = 1e-8;
+const MAX_REFLECTION_SCAN_POINTS = 250_000;
 
 type ParsedOperation = {
   rotation: [Vec3, Vec3, Vec3];
@@ -520,6 +521,10 @@ function getReflectionBounds(cell: UnitCellInput, dMin: number) {
   };
 }
 
+function estimateReflectionScanPoints(bounds: { h: number; k: number; l: number }) {
+  return (bounds.h * 2 + 1) * (bounds.k * 2 + 1) * (bounds.l * 2 + 1) - 1;
+}
+
 function xrayFormFactor(element: string, s: number) {
   const record = XRAY_FORM_FACTORS[element];
   if (!record) return null;
@@ -592,6 +597,21 @@ export function simulatePowderPattern(
   const thetaMax = (settings.twoThetaMax / 2) * (Math.PI / 180);
   const dMin = settings.wavelength / (2 * Math.sin(thetaMax));
   const bounds = getReflectionBounds(cell, dMin);
+  const scanPoints = estimateReflectionScanPoints(bounds);
+
+  if (scanPoints > MAX_REFLECTION_SCAN_POINTS) {
+    return {
+      reflections: [],
+      curve: [],
+      maxIntensity: 0,
+      messages: [
+        {
+          tone: 'error',
+          text: 'These lattice parameters would create too many reflections for the live teaching app. Reduce the cell lengths or narrow the experiment window before simulating.',
+        },
+      ],
+    };
+  }
 
   const rawReflections: PowderReflection[] = [];
   const seenOrbitKeys = new Set<string>();
